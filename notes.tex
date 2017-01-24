@@ -1,0 +1,520 @@
+%------------------------------------------------------------------------------
+% Beginning of journal.tex
+%------------------------------------------------------------------------------
+%
+% AMS-LaTeX version 2 sample file for journals, based on amsart.cls.
+%
+%        ***     DO NOT USE THIS FILE AS A STARTER.      ***
+%        ***  USE THE JOURNAL-SPECIFIC *.TEMPLATE FILE.  ***
+%
+% Replace amsart by the documentclass for the target journal, e.g., tran-l.
+%
+\documentclass{amsart}
+
+%     If your article includes graphics, uncomment this command.
+\usepackage{graphicx,booktabs}
+\usepackage{amsmath,amssymb}
+\usepackage{hyperref}
+\usepackage{algorithmicx,algpseudocode,algorithm}
+\usepackage{mathtools}
+\usepackage[letterpaper, margin=1 in]{geometry}
+
+\newtheorem{theorem}{Theorem}[section]
+\newtheorem{lemma}[theorem]{Lemma}
+\newtheorem{observation}[theorem]{Observation}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+
+\newtheorem{example}[theorem]{Example}
+\newtheorem{xca}[theorem]{Exercise}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+
+\theoremstyle{remark}
+\newtheorem{remark}[theorem]{Remark}
+
+\numberwithin{equation}{section}
+
+%    Absolute value notation
+\newcommand{\abs}[1]{\lvert#1\rvert}
+\newcommand{\T}{\intercal}
+\newcommand{\yd}{y_{\mathrm{direct}}}
+\newcommand{\cal}[1]{\mathcal{#1}}
+\newcommand{\mbf}[1]{\mathbf{#1}}
+\newcommand{\mbs}[1]{\mathbs{#1}}
+\newcommand{\mbb}[1]{\mathbb{#1}}
+%    Blank box placeholder for figures (to avoid requiring any
+%    particular graphics capabilities for printing this document).
+\newcommand{\blankbox}[2]{%
+  \parbox{\columnwidth}{\centering
+%    Set fboxsep to 0 so that the actual size of the box will match the
+%    given measurements more closely.
+    \setlength{\fboxsep}{0pt}%
+    \fbox{\raisebox{0pt}[#2]{\hspace{#1}}}%
+  }%
+}
+\newcommand{\E}[1]{\mathbb{E}\left[#1\right]}
+\newcommand{\I}[1]{\mathbf{1}_{\left\{ #1 \right\}}}
+
+\begin{document}
+
+\title{Notes on
+	Natural Gradient Descent with Geodesic Acceleration}
+
+%    Information for first author
+\author{Jonathan C. McKinney}
+%    Address of record for the research reported here
+\address{Computer Science Department, Stanford University, California, 94305}
+%    Current address
+\email{jmckinne@stanford.edu}
+%    \thanks will become a 1st page footnote.
+%    General info
+\date{}
+
+\maketitle
+\section{Subscripts, superscripts and Einstein's summation convention}
+In physics, subscripts and superscripts comprise a very good symbol system. Putting one index of a tensor as a subscript means it transforms \textbf{covariantly} w.r.t. the index, while putting the index as a superscript means it transforms \textbf{contravariantly} w.r.t. the index. There is also the Einstein's summation convention: when an index variable appears twice in a single term, it implies summation of that term over all the values of the index. Generally, the two indices should not be both superscripts or subscripts. For example,
+\begin{align*}
+x^\mu \hat{e}_{\mu} := \sum_{\mu=1}^n x^\mu \hat{e}_{\mu}.
+\end{align*}
+
+Any abstract vector $A$ can be written as a linear combination of bases, i.e., $A = A^\mu \hat{e}_\mu$, using the Einstein's summation convention. In physics, we simply refer to the vector by its coefficient $A^\mu$. Consider a transformation of the bases
+\begin{align*}
+\hat{e}_{\mu'} = \Lambda_{\mu'}^{\mu} \hat{e}_{\mu}.
+\end{align*}
+Since the vector is independent of specific bases, the coefficients satisfy $A^\mu \hat{e}_\mu = A^{\mu'} \hat{e}_{\mu'} = A^{\mu'} \Lambda_{\mu'}^{\mu} \hat{e}_{\mu}$. Therefore $A^\mu$ transform like
+\begin{align*}
+A^{\mu} =  \Lambda_{\mu'}^{\mu}A^{\mu'}.
+\end{align*}
+We say $\hat{e}_{\mu}$ transforms covariantly while $A^{\mu}$ contravariantly.
+
+Every vector space $T$ has an associated dual space $T^*$, which is the space of all linear functionals on $T$. The dual space is also a vector space and we can define the basis vectors $\hat{\theta}^\nu$ as 
+\begin{align*}
+	\hat{\theta}^\nu (\hat{e}_{\mu}) = \delta_\mu^\nu.
+\end{align*}
+Then every vector $\omega$ in the dual space can be written as
+\begin{align*}
+ 	\omega = \omega_\mu \hat{\theta}^\mu.
+\end{align*}
+As our indices have implied, $\hat{\theta}^{\mu}$ is contravariant while $\omega_\mu$ is covariant. Let $\hat{e}_{\mu'} = \Lambda_{\mu'}^{\mu} \hat{e}_{\mu}$ and $\hat{\theta}^{\nu'} = \Gamma_{\nu}^{\nu'} \hat{\theta}^{\nu}$. From $\hat{\theta}^{\nu'}(\hat{e}_{\mu'}) = \Gamma_{\nu}^{\nu'}\Lambda^{\mu}_{\mu'}\hat{\theta}^{\nu}(\hat{e}_\mu) = \delta^{\nu'}_{\mu'}$ we know $\Gamma^{\nu'}_\mu \Lambda^\mu_{\mu'} = \delta^{\nu'}_{\mu'}$, which is equivalent to $\Gamma = \Lambda^{-1}$. Therefore
+\begin{align*}
+\hat{\theta}^{\mu}= \Lambda_{\mu'}^{\mu} \hat{\theta}^{\mu'}
+\end{align*}
+and similarly
+\begin{align*}
+\omega_{\mu'} = \Lambda_{\mu'}^{\mu} \omega_{\mu}.
+\end{align*}
+
+The metric tensor $g_{\mu\nu}$ defines the inner product by
+\begin{align*}
+\langle V,W\rangle = g_{\mu\nu} V^\mu W^\nu.
+\end{align*}
+It is related to the infinitesimal distance on the manifold by
+\begin{align*}
+dr^2 = g_{\mu\nu} dx^\mu  dx^\nu.
+\end{align*}
+As a convention, we denote the inverse of the metric tensor as $g^{\alpha\beta}$, i.e.,
+\begin{align*}
+g^{\alpha\beta} g_{\beta\mu} = \delta^\alpha_\mu.
+\end{align*}
+\section{Geodesic acceleration for nonlinear least squares}
+In this section we summarize the basic ideas in \cite{GeoSethna}.
+
+We are given a regressor variable $t$, sampled at a set of points $\{ t_m \}$ with observed behavior $\{y_m\}$ and uncertainty  $\{\sigma_m\}$. The model is $f(t,\theta)$, which is parametrized by $\theta$. Define the residuals by
+\[
+	r_m(\theta) = \frac{y_m - f(t_m,\theta)}{\sigma_m}
+\]
+and the cost $C$ can be written as $C = \frac{1}{2} \sum_{m} r_m(\theta)^2$.
+
+Fix the sampled points $\{t_m\}$ we can interpret the residuals as components of an $M$-dimensional residual vector, whose space is the \emph{data space}. Suppose the model depends on $N$ parameters and $N < M$. By varying these $N$ parameters, the residual vector will sweep out an $N$-dimensional surface embedded within the $M$-dimensional data space. This surface is called the \textit{model manifold}. The metric tensor for this manifold is induced from the Euclidean space:
+\begin{gather*}
+dr_m = \partial_\mu r_m d\theta^\mu = J_{m\mu} d\theta^\mu\\
+dr^2 = (J^\intercal J)_{\mu\nu} d\theta^\mu d\theta^\nu\\
+g_{\mu\nu} = (J^\intercal J)_{\mu\nu} = \sum_m \partial_\mu r_m \partial_\nu r_m
+\end{gather*}
+The Levi-Civita connection is 
+\[
+ \Gamma_{\mu\nu}^\alpha = \frac{1}{2} g^{\alpha\beta} (\partial_\mu g_{\beta\nu} + \partial_\nu g_{\beta\mu} - \partial_\beta g_{\mu\nu}) = g^{\alpha\beta} \sum_{m} \partial_\beta r_m \partial_\mu\partial_\nu r_m
+\]
+and the geodesic equation along the direction $\frac{d\theta^\mu}{d\tau}$ is
+\begin{gather}
+\nabla_\mu \frac{d\theta^\mu}{d\tau} = 0\notag\\
+\frac{d^2 \theta^\mu}{d\tau^2} + \Gamma_{\alpha\beta}^\mu \frac{d\theta^\alpha}{d\tau}\frac{d\theta^\beta}{d\tau}=0\notag\\
+\ddot \theta^\mu + \Gamma_{\alpha\beta}^\mu \dot \theta^\alpha \dot \theta^\beta = 0 \label{geoeqn}
+\end{gather}
+
+The goal is to go along a geodesic line to the projection of $0$ on the model manifold. \textbf{Intuitively} (remains to be checked), starting from the position $\theta^\mu$, the direction of the geodesic line should be the projection of $-r$ onto the tangent space. In the data space, the projected vector should be
+\begin{align}
+	v = -P^\intercal r = -J(J^\intercal J)^{-1}J^\intercal r = -J g^{-1} J^\intercal r = -J_{\mu}g^{\mu\nu}\nabla_\nu C.
+\end{align}
+Converting to the parameter space, we have $v = J^\intercal \dot \theta$ and
+\begin{align}
+	\dot \theta^\mu = - g^{\mu\nu} \nabla_\nu C,
+\end{align}
+which recovers the direction of Hessian-Free or natural gradient descent. If we approximate the geodesic line up to 1st-order accuracy, we can obtain the update rule $\delta \theta = \dot \theta \delta \tau = - g^{\mu\nu} \nabla_\nu C \delta\tau$, which is the same as natural gradient descent or Hessian-Free optimization.
+
+The idea is to use 2nd-order approximation for the geodesic line, i.e., $\delta\theta = \dot \theta \delta\tau + \frac{1}{2}\delta \ddot \theta \delta\tau^2$. From the geodesic equation \eqref{geoeqn} we can calculate $\ddot \theta$. The resulting update rule is
+\begin{align}
+	\delta \theta^\mu &= - \dot \theta^\mu \delta \tau - \frac{1}{2}\Gamma_{\alpha\beta}^\mu \dot \theta^\alpha \dot \theta^\beta \delta\tau^2\notag\\
+	&= -\dot \theta^\mu \delta \tau - \frac{1}{2} g^{\mu\nu}\partial_\nu r_m \partial_\alpha \partial_\beta r_m \dot \theta^\alpha \dot \theta^\beta \delta\tau^2,
+\end{align}
+where the $\partial_\alpha \partial_\beta r_m \dot \theta^\alpha \dot \theta^\beta$ term involves a directional second-order derivative which can be quickly approximated by finite difference.
+
+There are other important tweaks for this method to work, but they do not affect the main picture. 
+\begin{enumerate}
+	\item Use model graph instead of model manifold to remove boundaries. It is a method similar to Tikhonov regularization used for inverting matrices.
+	\item Use some heuristic trust region method to damp the contribution of the geodesic acceleration term.
+\end{enumerate}
+\section{Geodesic acceleration for neural networks via MMD}
+One of the main difficulties is to handle loss functions besides least-squares. There are two ways:
+\begin{enumerate}
+	\item Replace all $r_m$ with $\sqrt{C_m}$. The distance between $0$ and $\theta$ in the Euclidean space is $\sum_m (\sqrt{C_m}-0)^2 = C$, corresponding to the original loss as long as the loss is decomposable. The embedding picture still holds if $N < M$. The metric is $g_{\mu\nu} = \frac{1}{4C_m} \partial_\mu C_m \partial_\nu C_m$ and $J^\T r = \partial_\mu \sum_m \sqrt{C_m} \sqrt{C_m} = \nabla C$ is the loss gradient.
+	\item View the neural network as a distribution~\cite{RevBengio}. More specifically, we view the output of the neural network to be a distributions $p_{\theta,x}(t)$. In order to keep the inner product structure we hope the distributions to be within a Hilbert space. The approach is to use kernel embeddings, i.e., map a distribution $p_\theta(t)$ to Hilbert space point $\E{k(t,\cdot)}$ defined by the kernel $k(\cdot,\cdot)$. We define $\phi(t) = k(t,\cdot)$. Now we can view the model graph to be embedded in an infinite dimensional Hilbert space so that the picture would always be valid. 
+	
+	The metric tensor is 
+	\begin{align*}
+		\sum_m \partial_\mu E_m[\phi(t)] \partial_\nu E_m[\phi(t)] &= \sum_m E_m[\partial_\mu \log p_\theta(t) \phi(t)] E_m[\partial_\nu \log p_\theta(t) \phi(t)]\\
+		&= \sum_m E_m E_m[k(t,t')\partial_\mu \log p_\theta(t) \partial_\nu \log p_\theta(t')],
+	\end{align*}
+	which is a special case of energetic natural gradient metric~\cite{EnergeticThomas}. $J^\T r$ now becomes
+	\begin{align*}
+	-J^\T (\phi(t_1) - E_1[\phi(t)], \cdots, \phi(t_M) - E_M[\phi(t)])^\T = \sum_m E_mE_m\{[k(t_m, t) - k(t, t')] \nabla \log p_\theta(t)\}	
+	\end{align*}	
+\end{enumerate}
+
+There are other difficulties to concern:
+\begin{itemize}
+	\item Running time is the bottleneck of 2nd order methods.
+	\item How to use mini-batch to do stochastic optimization.
+	\item Design effective damping techniques.
+\end{itemize}
+
+Related applications include autoencoders~\cite{DeepMartens}, RNNs~\cite{RNNMartens} and reinforcement learning~\cite{EnergeticThomas}. 
+
+\section{Another generalization of geodesic acceleration}
+Consider an arbitrary distribution family $p_\theta(\mbf{z})$ parametrized by $\theta$. We can view the model family as a manifold, with the infinitesimal distance to be $$\mathrm{KL}(p_{\theta}(\mbf{z})||p_{\theta+\Delta \theta}(\mbf{z})) = \Delta \theta^\intercal \mbf{F}_\theta \Delta \theta,$$ where $$\mbf{F}_\theta = \mbb{E}_{\mbf{z}}[(\nabla \log p_\theta(\mbf{z}))^\intercal (\nabla \log p_\theta(\mbf{z}))].$$ Namely, the metric is the Fisher information matrix, $g = \mbf{F}_\theta$.
+
+The natural gradient update is obtained by solving the following optimization problem:
+\begin{gather*}
+	\argmin_{\Delta\theta_1} \cal{L}(\theta+\Delta \theta_1) \\
+	s.t.\quad \Delta\theta_1^\intercal \mbf{F}_\theta \Delta\theta_1 = const,
+\end{gather*}
+where $\Delta\theta_1 = \mbf{F}_\theta^{-1} \nabla \cal{L}(\theta)$. If we view $\Delta\theta_1$ as the direction of the geodesic line, we can add an additional geodesic acceleration term $\Delta\theta_2 = \frac{1}{2} \eta\ddot \theta$, where $\ddot \theta$ satisfies the following geodesic equation
+\begin{align*}
+\ddot \theta^{\mu} + \Gamma_{\alpha\beta}^{\mu} \dot \theta^{\alpha}\dot \theta^{\beta} = 0,
+\end{align*}
+where $\dot \theta = \Delta\theta_1 = \mbf{F}_\theta^{-1} \nabla \cal{L}(\theta)$.
+
+Since $\dot \theta$ can already be efficiently computed in current ways, the main task is to estimate $\Gamma_{\alpha\beta}^\mu$:
+\begin{align*}
+\Gamma_{\alpha\beta}^\mu &= \frac{1}{2} g^{\mu\nu}(\partial_\alpha g_{\nu\beta} + \partial_\beta g_{\nu\alpha} - \partial_\nu g_{\alpha\beta})\\
+&=g^{\mu\nu} \mbb{E}_{p_{\theta}(\mbf{z})}\left\{\partial_\nu\log p_\theta(\mbf{z})\left[\partial_\alpha\partial_\beta\log p_\theta(\mbf{z}) + \frac{1}{2}\partial_\alpha \log p_\theta(\mbf{z}) \partial_\beta \log p_\theta(\mbf{z})\right]\right\}
+\end{align*}
+
+A feed-forward neural network can be treated as a conditional probability model $p_\theta(\mbf{t}\mid\mbf{x})$. The joint probability density is $q(\mbf{x})p_\theta(\mbf{t}\mid\mbf{x})$, where $q(\mbf{x})$ is usually calculated empirically. In addition, the output of the neural network is denoted as $\mbf{y}(\mbf{x}_i,\theta)$ ($o$-dimensional). 
+
+The Fisher information matrix for a neural network model is
+\begin{align*}
+\mbf{F}_\theta = \mbb{E}_{q(\mbf{x})} [\mbb{E}_{p_\theta(\mbf{t}\mid\mbf{x})}[(\nabla \log p_\theta(\mbf{t}\mid\mbf{x}))^\intercal(\nabla\log p_\theta(\mbf{t}\mid\mbf{x}))]]
+\end{align*}
+and the connection is
+\begin{align*}
+\Gamma_{\alpha\beta}^\mu = g^{\mu\nu} \mbb{E}_{q(\mbf{x})}\mbb{E}_{p_{\theta}(\mbf{t}\mid\mbf{x})}\left\{\partial_\nu\log p_\theta(\mbf{t}\mid\mbf{x})\left[\partial_\alpha\partial_\beta\log p_\theta(\mbf{t}\mid\mbf{x}) + \frac{1}{2}\partial_\alpha \log p_\theta(\mbf{t}\mid\mbf{x}) \partial_\beta \log p_\theta(\mbf{t}\mid\mbf{x})\right]\right\},
+\end{align*}
+which may be calculated analytically for some specific pairs of top layer activation and loss functions.
+\begin{itemize}
+	\item Linear activation function and squared loss. The distribution is
+	\begin{align*}
+	p_\theta(\mbf{t}\mid\mbf{x}) = \prod_{i=1}^o \cal{N}(t_i\mid \mbf{y}(\mbf{x},\theta)_i,\sigma^2).
+	\end{align*}
+	The connection is
+	\begin{align*}
+	\Gamma^\mu_{\alpha\beta} = \frac{1}{\sigma^2} \sum_{i=1}^{o} g^{\mu\nu} \mbb{E}_{q(\mbf{x})}[ \partial_\nu y_i \partial_\alpha \partial_\beta y_i],
+	\end{align*}
+	and
+	\begin{align*}
+	g_{\mu\nu} = \frac{1}{\sigma^2}\sum_{i=1}^o \mbb{E}_{q(\mbf{x})}[\partial_\mu y_i \partial_\nu y_i].
+	\end{align*}
+	\item Sigmoid activation function and negative log likelihood. The distribution is
+	\begin{align*}
+	p(\mbf{t}\mid\mbf{x}) = \prod_i \mbf{y}_i^{t_i} (1-\mbf{y}_i)^{1-t_i}.
+	\end{align*}
+	The connection is
+	\begin{align*}
+	\Gamma^\mu_{\alpha\beta} = g^{\mu\nu} \sum_{i=1}^o \mbb{E}_{q(\mbf{x})}\left[ \frac{2y_i-1}{2y_i^2(1-y_i)^2} \partial_\nu y_i \partial_\alpha y_i \partial_\beta y_i + \frac{1}{y_i(1-y_i)}\partial_\nu y_i\partial_\alpha\partial_\beta y_i \right],
+	\end{align*}
+	and
+	\begin{align*}
+	g_{\mu\nu} = \sum_{i=1}^{o} \mbb{E}_{q(\mbf{x})} \left[ \frac{1}{y_i(1-y_i)}\partial_\mu y_i \partial_\nu y_i\right].
+	\end{align*}
+	\item Softmax activation function and negative log likelihood. The distribution is
+	\begin{align*}
+	p(\mbf{t}\mid\mbf{x}) = \prod_{i=1}^o y_i^{t_i}.
+	\end{align*}
+	The connection is
+	\begin{align*}
+	\Gamma_{\alpha\beta}^\mu = g^{\mu\nu}\sum_{i=1}^o \mbb{E}_{q(\mbf{x})}\left[ \frac{1}{y_i}\partial_\nu y_i \partial_\alpha\partial_\beta y_i - \frac{1}{2y_i^2}\partial_\nu y_i \partial_\alpha y_i \partial_\beta y_i \right]
+	\end{align*}
+	and
+	\begin{align*}
+	g_{\mu\nu} = \sum_{i=1}^o \mbb{E}_{q(\mbf{x})}\left[\frac{1}{y_i}\partial_\alpha y_i \partial_\beta y_i\right].
+	\end{align*}
+\end{itemize}
+
+\section{Computing the geodesic acceleration term}
+There are two typical terms of geodesic acceleration, we will talk about how to handle each of them, with the assumption that $\dot \theta$ has been computed.
+\begin{itemize}
+	\item $\sum_{i=1}^o\mbb{E}_{q(\mbf{x})}[\partial_\nu y_i \partial_\alpha\partial_\beta y_i]\dot\theta^\alpha \dot\theta^\beta = \mbb{E}_{q(\mbf{x})}[\sum_{i=1}^o \partial_\nu y_i \partial_\alpha\partial_\beta y_i \dot\theta^\alpha \dot\theta^\beta]$. ($\dot \theta^\alpha = g^{\alpha\beta}\partial_\beta\cal{L}(\theta)$, thus being independent of $\mbf{x}$.) Note that $\partial_\alpha \partial_\beta y_i \dot\theta^\alpha \dot \theta^\beta$ is a directional second derivative of $y_i$ along the direction of $\dot \theta$. \cite{GeoSethna} suggests to use finite difference of 1st order derivatives to approximate this 2nd order directional derivative. But this method is susceptible to numeric and roundoff problems.
+	\item $\sum_{i=1}^o \mbb{E}_{q(\mbf{x})}[\partial_\nu y_i \partial_\alpha y_i \partial_\beta y_i]\dot\theta^\alpha \dot\theta^\beta = \mbb{E}_{q(\mbf{x})}[\sum_{i=1}^o \partial_\nu y_i \partial_\alpha y_i \partial_\beta y_i \dot \theta^\alpha \dot \theta^\beta] = \mbb{E}_{q(\mbf{x})}[\sum_{i=1}^o \partial_v y_i (\partial_\alpha y_i \dot\theta^\alpha)^2]$.
+\end{itemize}
+We develop new R-operator~\cite{HessianPearlmutter} methods to exactly compute the above two terms. We adopt the notations in~\cite{HFBookMartens}: Given an input $x$ and parameters $\theta = (W_1,\cdots,W_l,b_1,\cdots,b_l)$, an FNN computes its output $f(x,\theta) = a_l$ by the recurrence
+\begin{align*}
+	s_i &= W_i a_{i-1} + b_i\\
+	a_i &= \phi_i(s_i)
+\end{align*}
+Let
+\begin{align}
+\cal{D}v &= \frac{d L(y,f(x,\theta))}{dv}\label{dv}\\
+\cal{R}_v(g(\theta)) &= \lim_{\epsilon \rightarrow 0}\frac{1}{\epsilon} [g(\theta + \epsilon v) - g(\theta)]\label{rv}\\
+\cal{S}_v(g(\theta)) &= \lim_{\epsilon \rightarrow 0} \frac{1}{\epsilon^2} [g(\theta + 2\epsilon v) - 2 g(\theta+\epsilon v) + g(\theta)]. \label{sv}
+\end{align}
+Note that \eqref{dv} is the loss derivative w.r.t. $v$, \eqref{rv} is the directional derivative of $g(\theta)$ along the direction $v$, and \eqref{sv} is the directional second derivative of $g(\theta)$ along the direction $v$.\
+
+Since $\cal{R}_v$ and $\cal{S}_v$ are directional first and second derivatives, they share some properties of normal derivatives. For simplicity, we suppose $g(\theta)$ is 1-dimensional. In this case, $\cal{R}_v g(\theta) = \nabla g\cdot v$ and $\cal{S}_v (g(\theta)) = v^\intercal H_g v$.
+\begin{itemize}
+	\item 
+	\begin{align*}
+	\cal{R}_v(x_1+x_2) &= \cal{R}_v x_1 + \cal{R}_v x_2\\
+	\cal{R}_v(x_1 x_2) &= (\cal{R}_v x_1)x_2 + x_1(\cal{R}_vx_2)\tag{Product rule}\\
+	\cal{R}_v(f(x)) &= \frac{df}{dx}\cal{R}_v(x)\tag{Chain rule}
+	\end{align*}
+	\item
+	\begin{align*}
+	\cal{S}_v(x_1+x_2) &= \cal{S}_v x_1 + \cal{S}_v x_2\\
+	\cal{S}_v(x_1 x_2) &= (\cal{S}_v x_1) x_2 + 2 \cal{R}_v x_1 \cal{R}_v x_2 + x_1(\cal{S}_v x_2)\tag{Product rule}\\
+	\cal{S}_v(f(x)) &= \frac{df^2}{dx^2} (\cal{R}_v x)^2 + \frac{df}{dx} \cal{S}_v x\tag{Chain rule}.
+	\end{align*}
+\end{itemize}
+
+In order to compute the difficult terms involved in $\Gamma_{\alpha\beta}^\mu$, we consider the usual forward pass, backpropagation, R-operator propagation and our S-operator propagation respectively. The algorithms are as follows:
+\begin{enumerate}
+	\item Backpropgation. See Alg.~\ref{alg:backprop}.
+	\item Hessian by vector. See Alg.~\ref{alg:hessian}.
+	\item Fisher by vector. See Alg.~\ref{alg:fisher} and Alg.~\ref{alg:fisher2}. Alg.~\ref{alg:fisher} is adapted from Alg.~\ref{alg:hessian} because the Gauss-Newton matrix can be viewed as the Hessian if we replace $f(x,\theta)$ with its local linear approximation at $\theta_i$, i.e., $\tilde{f}(x,\theta) = f(x,\theta_i) + J_f(\theta - \theta_i)$. Since the Jacobian of $\tilde{f}(x,\theta)$ at $\theta=\theta_i$ is the same as $f(x,\theta)$, we do not need to modify the forward pass of Alg.~\ref{alg:hessian}. However, when we consider the variation of gradients, we need to view all quantities in the network as constant, such as $a_i$, $W_i$ and $b_i$, i.e., $\cal{D}a_i = 0$, $\cal{D}W_i = 0$ and $\cal{D}b_i = 0$. 
+	
+	In some important cases, the Fisher matrix and the Gauss-Newton matrix are the same. We require the loss function to be $L(\mbf{t},\mbf{y}) = -\log r(\mbf{t}\mid \mbf{y})$ and 
+	\begin{align*}
+		\log r(\mbf{t}\mid \mbf{y}) = \mbf{y}^\intercal T(\mbf{t}) - \log Z(\mbf{y}).
+	\end{align*}
+	This holds for multivariate normal distributions where $z$ parameterizes the mean $\mu$, multinomial distributions where the softmax of $\mbf{y}$ is the vector of probabilities for each class, and Bernoulli distributions where the probability is $\frac{1}{1 + \exp(-y)}$. Note that in order to use the trick of computing Gauss-Newton matrix to get the Fisher, we need to change nodes of the top layer. In other words, we follow the suggestion of \cite{FastNicol} to let the loss function do the top layer activation function.
+	
+	Alg.~\ref{alg:fisher2} is a direct way of getting $Gv$. It computes $Jv$ first, then $HJv$, and finally $J^\intercal H Jv = Gv$, which can be realized by R-operator, direct multiplication and backpropagation respectively. It seems to have the same time complexity as Alg.~\ref{alg:fisher}.
+	
+	\item Calculating the term $\sum_{i=1}^o \lambda_i \partial_\nu y_i \partial_{\alpha}\partial_\beta y_i \dot\theta^\alpha \dot\theta^\beta$. See Alg.~\ref{alg:term1}.
+	\item Calculating the term $\sum_{i=1}^o \lambda_i \partial_\nu y_i\partial_\alpha y_i \partial_\beta y_i \dot\theta^\alpha \dot\theta^\beta$. See Alg.~\ref{alg:term2}.
+\end{enumerate}
+
+As a conclusion, natural gradient descent with geodesic acceleration will cost roughly \textbf{twice} the time of natural gradient descent / Hessian-Free optimization.
+\begin{algorithm}
+	\caption{Backpropagation for computing the loss gradient}\label{alg:backprop}
+	\begin{algorithmic}[1]
+		\Require{$a_0 = x$}
+		\item[]
+		\For{$i \gets$ 1 to $l$}
+			\Comment{forward pass}
+			\State{$s_i\gets W_i a_{i-1} + b_i$}
+			\State{$a_i\gets \phi_i(s_i)$}
+		\EndFor
+		\item[]
+		\State{$\cal{D}a_l \gets \frac{\partial L(\mbf{t},\mbf{y})}{\partial \mbf{y}}\bigg|_{\mbf{y}=a_l}$}
+		\Comment{loss derivative computation for the top layer}
+		\item[]
+		\For{$i\gets$ $l$ to 1}
+		\Comment{backward pass}
+		\State{$\cal{D}s_i \gets \cal{D}a_i \odot \phi_i'(s_i)$}
+		\State{$\cal{D}W_i \gets \cal{D}s_i a_{i-1}^\intercal$}
+		\State{$\cal{D}b_i \gets \cal{D}s_i$}
+		\State{$\cal{D}a_{i-1}\gets W_i^\intercal \cal{D}s_i$}
+		\EndFor
+		\item[]
+		\Return{$\cal{D}\theta = (\cal{D}W_1,\cdots,\cal{D}W_l,\cal{D}b_1,\cdots,\cal{D}b_l)$}
+	\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}
+	\caption{An algorithm for computing $H(\theta;(x,y))v$}\label{alg:hessian}
+	\begin{algorithmic}[1]
+		\Require{$v$. We have run Alg.~\ref{alg:backprop} and abbreviate $\cal{R}_v$ to $\cal{R}$.}
+		\item[]
+		\State{$\cal{R}a_0 \gets 0$}
+		\Comment{Since $a_0$ is not a function of the parameters}
+		\item[]
+		\For{$i\gets$ 1 to $l$}
+		\Comment{forward pass}
+		\State{$\cal{R}s_i \gets \cal{R} W_i a_{i-1} + W_i \cal{R}a_{i-1} + \cal{R}b_i$}
+		\Comment{product rule}
+		\State{$\cal{R}a_i \gets \cal{R}s_i \phi_i'(s_i)$}		
+		\Comment{chain rule}
+		\EndFor
+		\item[]
+		\State{\begin{flalign*}
+		\cal{R}\cal{D}a_l &\gets \cal{R}\left( \frac{\partial L(\mbf{t},\mbf{y})}{\partial \mbf{y}}\bigg|_{\mbf{y}=a_l} \right)=\frac{\partial^2L(\mbf{t},\mbf{y})}{\partial \mbf{y}^2}\bigg|_{\mbf{y}=a_l} \cal{R} a_l&
+		\end{flalign*}}
+		\item[]
+		\For{$i \gets$ $l$ to 1}
+			\State{$
+					\cal{R}\cal{D}s_i \gets \cal{R}\cal{D}a_i \odot \phi_i'(s_i) + \cal{D}a_i \odot \cal{R}(\phi_i'(s_i))
+					=\cal{R}\cal{D}a_i\odot \phi_i'(s_i) + \cal{D} a_i \odot \phi_i''(s_i) \odot \cal{R}s_i
+				$}
+			\State{$\cal{R}\cal{D}W_i \gets \cal{R}\cal{D} s_i a_{i-1}^\intercal + \cal{D} s_i \cal{R} a_{i-1}^\intercal$}
+			\State{$\cal{R}\cal{D} b_i \gets \cal{R} \cal{D} s_i$}
+			\State{$\cal{R}\cal{D}a_{i-1} \gets \cal{R} W_i^\intercal \cal{D} s_i + W_i^\intercal \cal{R}\cal{D}s_i$}
+		\EndFor
+		\item[]
+		\Return{$H(\theta;(x,y))v = (\cal{R}\cal{D}W_i,\cdots,\cal{R}\cal{D}W_l, \cal{R}\cal{D}b_1,\cdots,\cal{R}\cal{D}b_l)$}
+		\end{algorithmic}
+\end{algorithm}
+\begin{algorithm}
+	\caption{An algorithm for computing $G(\theta;(x,y))v$.}\label{alg:fisher}
+	\begin{algorithmic}[1]
+		\Require{$v$. The Fisher matrix equals the Gauss-Newton matrix. We have run Alg.~\ref{alg:backprop}}
+		\item[]
+		\State{$\cal{R}a_0 \gets 0$}
+		\item[]
+		\For{$i \gets$ 1 to $l$}
+		\Comment{forward pass}
+		\State{$\cal{R}s_i \gets \cal{R}W_i a_{i-1} + W_i\cal{R}a_{i-1} + \cal{R}b_i$}
+		\State{$\cal{R}a_i \gets \cal{R}s_i \phi_i'(s_i)$}		
+		\EndFor
+		\item[]
+		\State{$\cal{R}\cal{D}a_l \gets \frac{\partial^2 L(\mbf{t},\mbf{y})}{\partial \mbf{y}^2}\bigg|_{\mbf{y}=a_l} \cal{R}a_l$}
+		\item[]
+		\For{$i \gets l$ to 1}
+		\Comment{backward pass}
+		\State{$\cal{R}\cal{D}s_i \gets \cal{R}\cal{D}a_i\odot \phi_i'(s_i)$}
+		\State{$\cal{R}\cal{D}W_i \gets \cal{R}\cal{D}s_i a_{i-1}^\intercal$}
+		\State{$\cal{R}\cal{D}b_i \gets \cal{R}\cal{D}s_i$}
+		\State{$\cal{R}\cal{D}a_{i-1} \gets W_i^\intercal \cal{R}\cal{D}s_i$}
+		\EndFor
+		\item[]
+		\Return{$G(\theta;(x,y))v = (\cal{R}\cal{D}W_1,\cdots,\cal{R}\cal{D}W_l,\cal{R}\cal{D}b_1,\cdots,\cal{R}\cal{D}b_l)$}
+	\end{algorithmic}
+\end{algorithm}
+\begin{algorithm}
+	\caption{Another algorithm for computing $\sum_{i=1}^o \lambda_i \partial_\mu y_i \partial_\nu y_i v^\nu$.}\label{alg:fisher2}
+	\begin{algorithmic}[1]
+		\Require{$v$. We abbreviate $\cal{R}_v$ to $\cal{R}$}
+		\item[]
+		\State{$a_0 \gets x$}
+		\State{$\cal{R}a_0 \gets 0$}
+		\item[]
+		\For{$i \gets$ 1 to $l$}
+		\Comment{forward pass}
+		\State{$s_i \gets W_i a_{i-1} + b_i$}
+		\State{$a_i \gets \phi(s_i)$}
+		\State{$\cal{R}s_i \gets \cal{R}W_i a_{i-1} + W_i\cal{R}a_{i-1} + \cal{R}b_i$}
+		\State{$\cal{R}a_i \gets \cal{R}s_i \phi_i'(s_i)$}		
+		\EndFor
+		\item[]
+		\State{$\cal{D}a_l = \lambda \cal{R}a_l$}
+		\item[]
+			\For{$i\gets$ $l$ to 1}
+			\Comment{backward pass}
+			\State{$\cal{D}s_i \gets \cal{D}a_i \odot \phi_i'(s_i)$}
+			\State{$\cal{D}W_i \gets \cal{D}s_i a_{i-1}^\intercal$}
+			\State{$\cal{D}b_i \gets \cal{D}s_i$}
+			\State{$\cal{D}a_{i-1}\gets W_i^\intercal \cal{D}s_i$}
+			\EndFor
+			\item[]
+			\Return{$\cal{D}\theta = (\cal{D}W_1,\cdots,\cal{D}W_l,\cal{D}b_1,\cdots,\cal{D}b_l)$}
+	\end{algorithmic}
+\end{algorithm}
+\begin{algorithm}
+	\caption{Calculating $\sum_{i=1}^o \lambda_i\partial_\nu y_i \partial_{\alpha}\partial_\beta y_i \dot\theta^\alpha \dot\theta^\beta$}\label{alg:term1}
+	\begin{algorithmic}[1]		
+		\Require{$\dot\theta$. Here we abbreviate $\cal{R}_{\dot\theta}$ to $\cal{R}$ and $\cal{S}_{\dot\theta}$ to $\cal{S}$.}
+		\item[]
+		\State{$a_0 \gets x$}
+		\State{$\cal{R} a_0 \gets 0$}
+		\State{$\cal{S} a_0 \gets 0$}
+		\item[]
+		\For{$i \gets 1$ to $l$}
+		\Comment{forward pass}
+		\State{$s_i \gets W_i a_{i-1} + b_i$}
+		\State{$a_i \gets \phi_i(s_i)$}
+		\State{$\cal{R}s_i \gets (\cal{R}W_i)a_{i-1} + W_i(\cal{R}a_{i-1}) + \cal{R}b_i$}
+		\State{$\cal{R}a_i \gets \phi'(s_i) \odot \cal{R}s_i$}
+		\State{$\cal{S}s_i \gets (\cal{S}W_i)a_{i-1} + 2(\cal{R}W_i)(\cal{R}a_{i-1}) + W_i(\cal{S}a_{i-1}) + \cal{S}b_i$}
+		\State{$\cal{S}a_i \gets \phi''(s_i)\odot (\cal{R}s_i)^2 + \phi'(s_i)\odot \cal{S}s_i$}
+		\EndFor
+		\item[]
+		\State{$\cal{D}a_l = \lambda \cal{S}a_l $}
+		\Comment{compute $J_y^\intercal\cal{S}a_l$ by backpropagation.}
+		\item[]
+		\For{$i = l$ to 1}
+			\Comment{backward pass}
+			\State{$\cal{D}s_i \gets \cal{D}a_i \odot \phi'(s_i)$}
+			\State{$\cal{D}W_i \gets (\cal{D}s_i) a_{i-1}^\intercal$}
+			\State{$\cal{D}b_i \gets \cal{D}s_i$}
+			\State{$\cal{D}a_{i-1} \gets W_i^\intercal \cal{D}s_i$}
+		\EndFor
+		\item[]
+		\Return{$\sum_{i=1}^0 \lambda_i \partial_\nu y_i \partial_\alpha\partial_\beta y_i \dot\theta^\alpha \dot\theta^\beta = (\cal{D}W_1,\cdots,\cal{D}W_l,\cal{D}b_1,\cdots,\cal{D}b_l)$.}
+	\end{algorithmic}
+\end{algorithm}
+\begin{algorithm}
+	\caption{Calculating $\sum_{i=1}^o \lambda_i \partial_\nu y_i \partial_{\alpha}y_i \partial_\beta y_i \dot\theta^\alpha \dot\theta^\beta$}\label{alg:term2}
+	\begin{algorithmic}[1]
+		\Require{$\dot\theta$. Here we abbreviate $\cal{R}_{\dot\theta}$ to $\cal{R}$.}
+		\item[]
+		\State{$a_0 = x$}
+		\State{$\cal{R}a_0 = 0$}
+		\item[]
+		\For{$i \gets 1$ to $l$}
+			\Comment{forward pass}
+			\State{$s_i \gets W_i a_{i-1} + b_i$}
+			\State{$a_i \gets \phi(s_i)$}
+			\State{$\cal{R}s_i \gets (\cal{R}W_i)a_{i-1} + W_i(\cal{R}a_{i-1}) + \cal{R}b_i$}
+			\State{$\cal{R}a_i \gets \phi'(s_i) \odot \cal{R}s_i$}
+		\EndFor
+		\item[]
+		\State{$\cal{D}a_l = \lambda (\cal{R}a_l)^2$}
+		\item[]
+		\For{$i = l$ to 1}
+		\Comment{backward pass}
+		\State{$\cal{D}s_i \gets \cal{D}a_i \odot \phi'(s_i)$}
+		\State{$\cal{D}W_i \gets (\cal{D}s_i) a_{i-1}^\intercal$}
+		\State{$\cal{D}b_i \gets \cal{D}s_i$}
+		\State{$\cal{D}a_{i-1} \gets W_i^\intercal \cal{D}s_i$}
+		\EndFor
+		\item[]
+		\Return{$\sum_{i=1}^0 \lambda_i \partial_\nu y_i \partial_\alpha y_i \partial_\beta y_i \dot\theta^\alpha \dot\theta^\beta = (\cal{D}W_1,\cdots,\cal{D}W_l,\cal{D}b_1,\cdots,\cal{D}b_l)$.}
+	\end{algorithmic}
+\end{algorithm}
+\bibliographystyle{unsrt}
+\begin{thebibliography}{10}
+
+\bibitem {GeoSethna} Transtrum, Mark K., Benjamin B. Machta, and James P. Sethna. ``Geometry of nonlinear least squares with applications to sloppy models and optimization." Physical Review E 83.3 (2011): 036701.
+
+\bibitem {RevBengio} Pascanu, Razvan, and Yoshua Bengio. ``Revisiting natural gradient for deep networks." arXiv preprint arXiv:1301.3584 (2013).
+
+\bibitem {DeepMartens} Martens, James. ``Deep learning via Hessian-free optimization." Proceedings of the 27th International Conference on Machine Learning (ICML-10). 2010.
+
+\bibitem {RNNMartens} Martens, James, and Ilya Sutskever. "Learning recurrent neural networks with hessian-free optimization." Proceedings of the 28th International Conference on Machine Learning (ICML-11). 2011.
+
+\bibitem {GeoSethna2} Transtrum, Mark K., and James P. Sethna. ``Geodesic acceleration and the small-curvature approximation for nonlinear least squares." arXiv preprint arXiv:1207.4999 (2012).
+
+\bibitem{FastNicol} Schraudolph, Nicol N. ``Fast curvature matrix-vector products for second-order gradient descent." Neural computation 14.7 (2002): 1723-1738.
+
+\bibitem{EnergeticThomas} Thomas, Philip S., et al. "Energetic Natural Gradient Descent."
+
+\bibitem{HessianPearlmutter} Pearlmutter, Barak A. "Fast exact multiplication by the Hessian." Neural computation 6.1 (1994): 147-160.
+
+\bibitem{HFBookMartens} Martens, James, and Ilya Sutskever. "Training deep and recurrent networks with hessian-free optimization." Neural networks: Tricks of the trade. Springer Berlin Heidelberg, 2012. 479-535.
+\end{thebibliography}
+
+\end{document}								
+
+%------------------------------------------------------------------------------
+% End of journal.tex
+%------------------------------------------------------------------------------
