@@ -9,4 +9,4 @@ python main.py -h
 ```
 for help. Note that the codes were written in Python 3.5 and please make sure theano has been installed.
 
-The LaTeX document is `nodes.tex`.
+The LaTeX document is `notes.tex`.
